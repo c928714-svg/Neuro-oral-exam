@@ -117,6 +117,11 @@ label.f{display:grid;gap:4px;font-size:.88rem;color:var(--muted)}
 .chip{border:1px solid transparent;background:var(--chip);padding:4px 10px;border-radius:999px;font-size:.84rem;line-height:1.4}
 .chip:hover{border-color:var(--muted)}
 .chip.on{background:var(--chip-on);color:var(--chip-on-ink)}
+.chip .cost{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);margin-left:6px;font-variant-numeric:tabular-nums}
+.chip.on .cost{color:inherit;opacity:.65}
+.simflash{font-family:var(--f-mono);font-weight:700;color:var(--warn);opacity:0}
+.simflash.go{animation:simfade 1.6s ease-out}
+@keyframes simfade{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-10px)}}
 .chip.miss{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .chip.hit{background:var(--ok-soft);border-color:var(--ok);color:var(--ink)}
 .ask{display:flex;gap:8px;margin-top:12px}
@@ -4546,7 +4551,7 @@ let tick = null;
 const GKEY="neuroOral.gemini";
 function gLoad(){ try{ return JSON.parse(localStorage.getItem(GKEY))||{}; }catch(e){ return {}; } }
 function gSave(o){ try{ localStorage.setItem(GKEY, JSON.stringify(o)); }catch(e){} }
-const G = Object.assign({key:"", model:"gemini-2.5-flash"}, gLoad());
+const G = Object.assign({key:"", model:"gemini-3.8-flash"}, gLoad());
 function gContents(input){
  const turns = typeof input==="string" ? [{role:"user",content:input}] : input;
  const out=[];
@@ -4560,7 +4565,7 @@ function gErr(status, body){
  return {code, message:msg};
 }
 function makeGemini(){
- const base = () => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(G.model||"gemini-2.5-flash")}`;
+ const base = () => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(G.model||"gemini-3.8-flash")}`;
  async function call(input, opts={}, json=false){
   const body = {contents:gContents(input), generationConfig:{temperature: json?0.7:0.8}};
   if(json) body.generationConfig.responseMimeType="application/json";
@@ -4601,7 +4606,7 @@ function viewSettings(){
  return `<div class="stack" style="max-width:760px"><div><h2>AI 設定</h2><p class="muted" style="margin:4px 0 0">AI 病人、AI 考官、AI 評分與 AI 出新題使用你自己的 Google Gemini API 金鑰。沒有金鑰也可以完整使用按鈕問診、題庫考官與所有題目。</p></div>
  <div class="panel stack">
   <label class="f">Gemini API 金鑰<input type="password" id="gkey" autocomplete="off" placeholder="AIza…" value="${esc(G.key)}"></label>
-  <label class="f">模型名稱<input type="text" id="gmodel" list="gmodels" value="${esc(G.model)}"><datalist id="gmodels"><option value="gemini-2.5-flash"><option value="gemini-2.5-pro"><option value="gemini-2.5-flash-lite"></datalist></label>
+  <label class="f">模型名稱<input type="text" id="gmodel" list="gmodels" value="${esc(G.model)}"><datalist id="gmodels"><option value="gemini-3.8-flash"><option value="gemini-3.6-flash"><option value="gemini-3.5-flash-lite"><option value="gemini-3.1-pro-preview"></datalist></label>
   <div class="row"><button class="btn primary" data-act="gsave">儲存</button><button class="btn" data-act="gtest">測試連線</button><button class="btn ghost" data-act="gclear">清除金鑰</button><span class="small muted" id="gmsg">${G.key?"已設定金鑰。":"尚未設定金鑰。"}</span></div>
  </div>
  <div class="panel doc" style="max-width:none">
@@ -4637,11 +4642,29 @@ function beep(n=1){
  }catch(e){}
 }
 function fmt(sec){ const neg=sec<0; sec=Math.abs(Math.round(sec)); const m=Math.floor(sec/60), s=sec%60; return (neg?"+":"")+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
+/* 每個項目消耗的模擬秒數（基準；可在設定調整倍率） */
+const HX_COST = {job:10,hand:5,diet:10,onset:40,course:30,dist:30,func:30,trigger:30,tx:30,
+ prox:20,distal:20,bulbar:20,speech:15,eye:20,resp:15,atrophy:20,myotonia:20,numb:25,sataxia:20,saddle:15,lhermitte:15,
+ oh:15,urine:20,bowel:15,sex:15,sweat:10,tremor:20,slow:20,invol:30,fall:20,coord:20,memory:30,psych:25,sleep:20,seizure:15,headache:20,
+ vision:15,hearing:10,smell:10,constitutional:20,autoimmune:20,cardio:15,gi:15,other:20,endo:15,pmh:25,surg:15,drug:20,female:15,
+ abc:15,toxin:20,tocc:20,fh:45,consang:10,milestone:25};
+const NE_COST = {obs:10,item3:20,mmse:90,cortical:90,cn1:30,pupil:30,fundus:60,va_vf:60,eom:60,ptosis:75,vest:45,cn5:40,cn7:30,cn8:45,bulbar_ne:40,tongue:20,cn11:30,
+ bulk:45,tone:40,mp_ul:90,mp_ll:90,scap:40,myot:30,fatig:90,dtr_ul:40,dtr_ll:45,hoff:10,babin:15,jaw:10,other_reflex:20,
+ pp:120,temp:60,jps:60,vib:60,saddle_ne:20,cortical_s:45,fnf:30,ram:20,hks:30,brady:40,rigid:40,tremor_ne:40,invol_ne:45,pull:20,
+ gait:60,tandem:20,heeltoe:30,romberg:30,gower:30,bp:240,spine:30,skin:30,organ:60,meningeal:20};
+const AI_COST = {hx:20, ne:45};
+const MULTS = [[0.5,"0.5 倍（寬鬆）"],[1,"1 倍（標準）"],[1.5,"1.5 倍（嚴格）"],[2,"2 倍（很趕）"]];
+function costOn(){ const st=S.persist.settings; return st.timeCost!==false; }
+function costOf(kind,id){ const E=S.persist.exam; if(!E||!E.timeCost) return 0; const base = kind==="hx"? (HX_COST[id]??20) : kind==="ne"? (NE_COST[id]??30) : (AI_COST[id]??30); return Math.round(base*(E.mult||1)); }
+function baseCost(kind,id){ const st=S.persist.settings; return Math.round((kind==="hx"?(HX_COST[id]??20):(NE_COST[id]??30))*(+st.mult||1)); }
+function fmtS(s){ s=Math.round(s); return s>=60? Math.floor(s/60)+"′"+(s%60? String(s%60).padStart(2,"0")+"″":"") : s+"″"; }
 function remaining(){
  const E=S.persist.exam; if(!E) return 0;
  const dur = (E.phase==="enc"? E.enc : E.exq)*60;
- return dur - (Date.now()-E.phaseStart)/1000;
+ return dur - (Date.now()-E.phaseStart)/1000 - (E.phase==="enc"? (E.sim||0) : 0);
 }
+function spend(sec, kind){ const E=S.persist.exam; if(!sec) return; E.sim=(E.sim||0)+sec; if(kind==="hx") E.simHx=(E.simHx||0)+sec; else E.simNe=(E.simNe||0)+sec;
+ const el=$("#simflash"); if(el){ el.textContent="−"+fmtS(sec); el.classList.remove("go"); void el.offsetWidth; el.classList.add("go"); } }
 function startTick(){
  clearInterval(tick);
  tick = setInterval(() => {
@@ -4669,7 +4692,7 @@ function startExam(){
   id = from[Math.floor(Math.random()*from.length)].id;
  }
  S.persist.exam = {caseId:id, hidden: st.mode!=="pick", enc:+st.enc||40, exq:+st.exq||20, phase:"enc", phaseStart:Date.now(), started:Date.now(),
-  asked:[], done:[], log:[], notes:"", pres:{summary:"",loc:"",ddx:"",work:""}, qi:0, qshow:false, qrate:{}, qans:{}, chat:[], examMode:"bank", warned:{}};
+  asked:[], done:[], log:[], notes:"", pres:{summary:"",loc:"",ddx:"",work:""}, qi:0, qshow:false, qrate:{}, qans:{}, chat:[], examMode:"bank", warned:{}, timeCost: st.timeCost!==false, mult:+st.mult||1, sim:0, simHx:0, simNe:0};
  save(); S.view="exam"; S.tab="hx"; render(); startTick(); window.scrollTo(0,0);
 }
 function toExaminer(){
@@ -4679,7 +4702,7 @@ function finishExam(){
  const E=S.persist.exam; const c=caseById(E.caseId);
  const sc = scoreOf(E,c);
  E.phase="done"; E.finished=Date.now();
- S.persist.records.unshift({caseId:c.id, label:c.label, date:new Date().toISOString(), hk:sc.hk, nk:sc.nk, hxN:E.asked.length, neN:E.done.length, mins:Math.round((E.finished-E.started)/60000), self:sc.self});
+ S.persist.records.unshift({caseId:c.id, label:c.label, date:new Date().toISOString(), hk:sc.hk, nk:sc.nk, hxN:E.asked.length, neN:E.done.length, sim:E.timeCost?Math.round(E.sim||0):null, mins:Math.round((E.finished-E.started)/60000), self:sc.self});
  S.persist.records = S.persist.records.slice(0,60);
  save(); clearInterval(tick); S.view="debrief"; render(); window.scrollTo(0,0);
 }
@@ -4697,8 +4720,10 @@ function hxAnswer(c,id){
 function neAnswer(c,id){ return c.ne[id] || NE_DEFAULT[id] || "正常。"; }
 function askItem(kind,id){
  const E=S.persist.exam, c=caseById(E.caseId);
- if(kind==="hx"){ if(!E.asked.includes(id)) E.asked.push(id); E.log.push({t:"hx", id, q:HX_LABEL[id], a:hxAnswer(c,id)}); }
- else { if(!E.done.includes(id)) E.done.push(id); E.log.push({t:"ne", id, q:NE_LABEL[id], a:neAnswer(c,id)}); }
+ const arr = kind==="hx"? E.asked : E.done; const again = arr.includes(id);
+ const sec = again? 0 : costOf(kind,id);
+ if(!again){ arr.push(id); spend(sec, kind); }
+ E.log.push({t:kind, id, q:(kind==="hx"?HX_LABEL[id]:NE_LABEL[id])+(again?"（重看紀錄，不另計時）":""), a:kind==="hx"?hxAnswer(c,id):neAnswer(c,id), sec});
  save(); renderExamDynamic();
 }
 
@@ -4706,7 +4731,8 @@ function askItem(kind,id){
 async function aiAsk(kind){
  const inp=$("#askbox"); const text=inp.value.trim(); if(!text||S.aiBusy||!S.sample) return;
  const E=S.persist.exam, c=caseById(E.caseId);
- S.aiBusy=true; inp.value=""; E.log.push({t:"ai", q:text, a:"……", pending:true}); renderExamDynamic();
+ const aisec = costOf("ai", kind); spend(aisec, kind);
+ S.aiBusy=true; inp.value=""; E.log.push({t:"ai", q:text, a:"……", pending:true, sec:aisec}); renderExamDynamic();
  const entry=E.log[E.log.length-1];
  let prompt;
  if(kind==="hx"){
@@ -4856,6 +4882,11 @@ function viewHome(){
     <label class="f">報告 + 考官（分鐘）<input type="number" id="exq" min="5" max="60" value="${st.exq}"></label>
    </div>
    <label class="toggle"><input type="checkbox" id="sound" ${st.sound?"checked":""}> 倒數 5 分、1 分鐘時響鈴（真實考場考官可能忘記提醒）</label>
+   <div class="stack" style="gap:6px">
+    <label class="toggle"><input type="checkbox" id="timecost" ${costOn()?"checked":""}> 每個問診與檢查項目都會消耗時間</label>
+    <div class="row"><label class="f" style="flex:1">時間倍率<select id="mult" ${costOn()?"":"disabled"}>${MULTS.map(([v,l])=>`<option value="${v}" ${(+st.mult||1)===v?"selected":""}>${l}</option>`).join("")}</select></label></div>
+    <p class="small muted" style="margin:0">1 倍時：問一題病史約 5–45 秒，一項檢查約 10 秒到 4 分鐘（臥立位血壓），打字問 AI 病人 20 秒、自述檢查 45 秒。全部問完做完約需 ${Math.round((Object.values(HX_COST).reduce((a,b)=>a+b,0)+Object.values(NE_COST).reduce((a,b)=>a+b,0))*(+st.mult||1)/60)} 分鐘，一定要取捨。</p>
+   </div>
    <p class="small muted" style="margin:0">AI 病人與 AI 考官：${S.sample? "可使用（Gemini："+esc(G.model)+"）" : "到「AI 設定」輸入 Gemini API 金鑰即可使用；沒有 AI 時仍可完整使用按鈕問診與題庫考官。"}</p>
    <button class="btn primary" data-act="start" ${E&&E.phase!=="done"?"disabled":""}>進入考場</button>
    ${E&&E.phase!=="done"?'<p class="small muted" style="margin:0">先結束或放棄進行中的考試。</p>':""}
@@ -4872,7 +4903,7 @@ function viewExam(){
  const c=caseById(E.caseId);
  const bar = `<div class="exbar">
   <div class="ph"><span>${E.phase==="enc"?"第一階段":"第二階段"}</span><b>${E.phase==="enc"?"問診 + 神經學檢查":"報告 + 考官提問"}</b></div>
-  <div class="clock" id="clock">${fmt(remaining())}</div>
+  <div class="clock" id="clock">${fmt(remaining())}</div>${E.phase==="enc"&&E.timeCost?`<div class="ph"><span>操作已耗時</span><b class="mono" id="simt">${fmt(E.sim||0)}</b></div><span class="simflash" id="simflash" aria-live="polite"></span>`:""}
   <div class="sp">${E.phase==="enc"? `<button class="btn primary" data-act="toexq">結束問診，開始報告</button>` : `<button class="btn primary" data-act="finish">結束考試，看檢討</button>`}</div>
  </div><div id="bellslot"></div>`;
  const pt = `<div class="panel pt"><div class="eyebrow">病人</div><div class="who">${c.age} 歲 ${c.sex==="M"?"男性":"女性"}</div><div class="door">${esc(c.door)}</div><div class="cc">${esc(c.cc)}</div></div>`;
@@ -4883,7 +4914,7 @@ function viewExam(){
     <div class="panel"><label class="f">筆記（考場有空白紙）<textarea id="notes" rows="5" placeholder="時序、陽性發現、想追問的點…">${esc(E.notes)}</textarea></label></div>
    </div>
    <div class="panel stack">
-    <div class="row"><div class="seg" role="group"><button data-tab="hx" aria-pressed="${S.tab==="hx"}">問診</button><button data-tab="ne" aria-pressed="${S.tab==="ne"}">神經學檢查</button></div><span class="small muted">點一下 = 問或做這一項；不會提示哪些是重點。</span></div>
+    <div class="row"><div class="seg" role="group"><button data-tab="hx" aria-pressed="${S.tab==="hx"}">問診</button><button data-tab="ne" aria-pressed="${S.tab==="ne"}">神經學檢查</button></div><span class="small muted">點一下 = 問或做這一項；不會提示哪些是重點。${E.timeCost?"灰色數字是這一項會花掉的時間。":""}</span></div>
     <div id="itemgroups" class="groups"></div>
     <div id="askwrap"></div>
    </div>
@@ -4924,14 +4955,16 @@ function renderExamDynamic(){
  const E=S.persist.exam; if(!E||S.view!=="exam") return; const c=caseById(E.caseId);
  const log=$("#log");
  if(log){
-  log.innerHTML = E.log.length? E.log.map(x=>`<div class="e ${x.t}"><div class="q">${x.t==="ne"?"檢查":x.t==="ai"?(x.kind==="ne"?"檢查（自述）":"自由提問"):"問"}：<b>${esc(x.q)}</b></div><div class="a">${esc(x.a)}</div></div>`).join("") : `<div class="empty">從右側點選要問的病史或要做的檢查，回答會依序出現在這裡。</div>`;
+  log.innerHTML = E.log.length? E.log.map(x=>`<div class="e ${x.t}"><div class="q">${x.t==="ne"?"檢查":x.t==="ai"?(x.kind==="ne"?"檢查（自述）":"自由提問"):"問"}：<b>${esc(x.q)}</b>${x.sec?` <span class="mono">−${fmtS(x.sec)}</span>`:""}</div><div class="a">${esc(x.a)}</div></div>`).join("") : `<div class="empty">從右側點選要問的病史或要做的檢查，回答會依序出現在這裡。</div>`;
   log.scrollTop=log.scrollHeight;
  }
  const cnt=$("#counts"); if(cnt) cnt.textContent=`病史 ${E.asked.length} · 檢查 ${E.done.length}`;
+ const st2=$("#simt"); if(st2) st2.textContent=fmt(E.sim||0);
+ const ck=$("#clock"); if(ck){ const r=remaining(); ck.textContent=fmt(r); ck.className="clock"+(r<=0?" over":r<=300?" warn":""); }
  const g=$("#itemgroups");
  if(g){
   const groups = S.tab==="hx"? HX_GROUPS : NE_GROUPS; const set = new Set(S.tab==="hx"? E.asked : E.done);
-  g.innerHTML = groups.map(([name,items])=>`<div class="grp"><h4>${esc(name)}</h4><div class="chips">${items.map(([id,l])=>`<button class="chip ${set.has(id)?"on":""}" data-item="${id}">${esc(l)}</button>`).join("")}</div></div>`).join("");
+  g.innerHTML = groups.map(([name,items])=>`<div class="grp"><h4>${esc(name)}</h4><div class="chips">${items.map(([id,l])=>`<button class="chip ${set.has(id)?"on":""}" data-item="${id}">${esc(l)}${E.timeCost?`<span class="cost">${fmtS(costOf(S.tab,id))}</span>`:""}</button>`).join("")}</div></div>`).join("");
  }
  const aw=$("#askwrap");
  if(aw){
@@ -4955,7 +4988,7 @@ function viewDebrief(){
   <div class="scores">
    <div class="score"><div class="v">${sc.hk}%</div><div class="l">重點病史 ${sc.hkHit}/${sc.hkN}</div><div class="bar"><i style="width:${sc.hk}%"></i></div></div>
    <div class="score"><div class="v">${sc.nk}%</div><div class="l">重點檢查 ${sc.nkHit}/${sc.nkN}</div><div class="bar"><i style="width:${sc.nk}%"></i></div></div>
-   <div class="score"><div class="v">${E.asked.length}<span class="small muted"> / ${E.done.length}</span></div><div class="l">問了幾項病史 / 做了幾項檢查</div></div>
+   <div class="score"><div class="v">${E.asked.length}<span class="small muted"> / ${E.done.length}</span></div><div class="l">問了幾項病史 / 做了幾項檢查${E.timeCost?`<br>耗時：病史 ${fmtS(E.simHx||0)}、檢查 ${fmtS(E.simNe||0)}`:""}</div></div>
    <div class="score"><div class="v">${sc.self==null?"—":sc.self+"%"}</div><div class="l">考官題自評</div></div>
   </div>
   <div class="two">
@@ -5029,7 +5062,7 @@ function viewBank(){
 function viewRecords(){
  const R=S.persist.records;
  return `<div class="stack"><div class="row"><h2 style="margin-right:auto">練習紀錄</h2>${R.length?'<button class="btn sm" data-act="clearrec">清除紀錄</button>':""}</div>
- ${R.length? `<div class="panel tablewrap"><table class="rec"><thead><tr><th>日期</th><th>案例</th><th>重點病史</th><th>重點檢查</th><th>病史/檢查數</th><th>考官題自評</th><th>用時</th></tr></thead><tbody>${R.map(x=>`<tr><td class="mono">${esc(new Date(x.date).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}))}</td><td>${esc(x.label)}</td><td class="mono">${x.hk}%</td><td class="mono">${x.nk}%</td><td class="mono">${x.hxN} / ${x.neN}</td><td class="mono">${x.self==null?"—":x.self+"%"}</td><td class="mono">${x.mins}′</td></tr>`).join("")}</tbody></table></div><p class="small muted">紀錄只存在這個瀏覽器。</p>` : `<div class="empty">完成第一場模擬考後，成績會出現在這裡。</div>`}
+ ${R.length? `<div class="panel tablewrap"><table class="rec"><thead><tr><th>日期</th><th>案例</th><th>重點病史</th><th>重點檢查</th><th>病史/檢查數</th><th>考官題自評</th><th>用時</th></tr></thead><tbody>${R.map(x=>`<tr><td class="mono">${esc(new Date(x.date).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}))}</td><td>${esc(x.label)}</td><td class="mono">${x.hk}%</td><td class="mono">${x.nk}%</td><td class="mono">${x.hxN} / ${x.neN}</td><td class="mono">${x.self==null?"—":x.self+"%"}</td><td class="mono">${x.mins}′${x.sim!=null?`<span class="muted">＋${fmtS(x.sim)}</span>`:""}</td></tr>`).join("")}</tbody></table></div><p class="small muted">紀錄只存在這個瀏覽器。</p>` : `<div class="empty">完成第一場模擬考後，成績會出現在這裡。</div>`}
  <div id="clearconfirm"></div></div>`;
 }
 
@@ -5064,8 +5097,8 @@ document.addEventListener("click", e=>{
   case "exstop": if(S.ctl) S.ctl.abort(); break;
   case "aigrade": aiGrade(); break;
   case "gen": genCase(); break;
-  case "gsave": G.key=$("#gkey").value.trim(); G.model=$("#gmodel").value.trim()||"gemini-2.5-flash"; gSave(G); refreshAI(); $("#gmsg").textContent=G.key?"已儲存。":"已儲存（未設定金鑰）。"; break;
-  case "gtest": G.key=$("#gkey").value.trim(); G.model=$("#gmodel").value.trim()||"gemini-2.5-flash"; gSave(G); refreshAI(); gTest(); break;
+  case "gsave": G.key=$("#gkey").value.trim(); G.model=$("#gmodel").value.trim()||"gemini-3.8-flash"; gSave(G); refreshAI(); $("#gmsg").textContent=G.key?"已儲存。":"已儲存（未設定金鑰）。"; break;
+  case "gtest": G.key=$("#gkey").value.trim(); G.model=$("#gmodel").value.trim()||"gemini-3.8-flash"; gSave(G); refreshAI(); gTest(); break;
   case "gclear": G.key=""; gSave(G); refreshAI(); render(); break;
   case "delai": S.persist.custom=(S.persist.custom||[]).filter(c=>c.id!==d.id); if(S.persist.settings.pick===d.id) S.persist.settings.pick="c1"; save(); render(); break;
   case "libtoggle": S.libOpen[d.id]=!S.libOpen[d.id]; render(); break;
@@ -5085,6 +5118,7 @@ function readSettings(keepMode){
  if(enc) st.enc=Math.max(5,Math.min(90,+enc.value||40));
  if(exq) st.exq=Math.max(5,Math.min(60,+exq.value||20));
  if(snd) st.sound=snd.checked;
+ const tc=$("#timecost"), mu=$("#mult"); if(tc) st.timeCost=tc.checked; if(mu) st.mult=+mu.value||1;
  if(!keepMode){ const m=document.querySelector('input[name=mode]:checked'); if(m) st.mode=m.value; const p=$("#pick"); if(p) st.pick=p.value; }
  save();
 }
@@ -5092,7 +5126,7 @@ document.addEventListener("change", e=>{
  const t=e.target;
  if(t.name==="mode"){ S.persist.settings.mode=t.value; $("#pick").disabled = t.value!=="pick"; save(); }
  if(t.id==="pick"){ S.persist.settings.pick=t.value; save(); }
- if(t.id==="enc"||t.id==="exq"||t.id==="sound"){ readSettings(true); const f=document.querySelector(".flow"); if(f) render(); }
+ if(t.id==="enc"||t.id==="exq"||t.id==="sound"||t.id==="timecost"||t.id==="mult"){ readSettings(true); const f=document.querySelector(".flow"); if(f) render(); }
  if(t.id==="bankf"){ S.bankFilter=t.value; S.bankIdx=0; S.bankShow=false; render(); }
  if(t.id==="weak"){ S.bankOnlyWeak=t.checked; S.bankIdx=0; S.bankShow=false; render(); }
 });
